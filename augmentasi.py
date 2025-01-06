@@ -2,8 +2,13 @@ import cv2
 import numpy as np
 import os
 import random
+from tqdm import tqdm
+import dlib
 
-
+# Load dlib models
+face_detector = dlib.get_frontal_face_detector()
+shape_predictor = dlib.shape_predictor("../shape_predictor_68_face_landmarks.dat")
+face_recognizer = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")
 
 def rotate_image(image, angle):
     (h, w) = image.shape[:2]
@@ -84,9 +89,9 @@ def augment_image(image):
     # Original image
     augmented_images.append(image)
 
-    # Rotate
-    augmented_images.append(rotate_image(image, 90))
-    augmented_images.append(rotate_image(image, -90))
+    # # Rotate
+    # augmented_images.append(rotate_image(image, 90))
+    # augmented_images.append(rotate_image(image, -90))
 
     # Scale
     augmented_images.append(scale_image(image, 2))
@@ -100,14 +105,16 @@ def augment_image(image):
 
     # Flip
     augmented_images.append(flip_image(image, 1))  # Horizontal flip
-    augmented_images.append(flip_image(image, 0))  # Vertical flip
+    # augmented_images.append(flip_image(image, 0))  # Vertical flip
 
     # Brightness and Contrast
     augmented_images.append(adjust_brightness_contrast(image, 30, 30))
+    augmented_images.append(adjust_brightness_contrast(image, 90, 90))
     augmented_images.append(adjust_brightness_contrast(image, -80, -80))
+    augmented_images.append(adjust_brightness_contrast(image, -120, -120))
 
     # Gaussian Noise
-    augmented_images.append(add_gaussian_noise(image, 0, 25))
+    augmented_images.append(add_gaussian_noise(image, 0, 15))
 
     # Crop
     h, w = image.shape[:2]
@@ -129,26 +136,39 @@ def augment_image(image):
     return augmented_images
 
 known_directory = "known_faces"
-output_directory = "augmented_faces"
+output_directory = "../augmented_faces"
 
 # Ensure output directory exists
 os.makedirs(output_directory, exist_ok=True)
-
+            
 # Process each photo in the known directory
-for folder in os.listdir(known_directory):
+for folder in tqdm(os.listdir(known_directory), desc="Processing Folders"):
     input_folder_path = os.path.join(known_directory, folder)
     output_folder_path = os.path.join(output_directory, folder)
     
     # Ensure subfolder exists in augmented_faces
     os.makedirs(output_folder_path, exist_ok=True)
     
-    for filename in os.listdir(input_folder_path):
+    # Use tqdm for the file loop
+    for filename in tqdm(os.listdir(input_folder_path), desc=f"Processing Images in {folder}", leave=False):
         if filename.endswith(".jpg") or filename.endswith(".png"):
             image_path = os.path.join(input_folder_path, filename)
             image = cv2.imread(image_path)
 
+
+            faces = face_detector(image)
+            if len(faces) == 0:
+               
+                os.remove(image_path)
+                continue
+
+            for face in faces:
+                x, y, w, h = (face.left(), face.top(), face.width(), face.height())
+                face_frame = image[y:y + h, x:x + w]
+
+    
             # Augment the image
-            augmented_images = augment_image(image)
+            augmented_images = augment_image(face_frame)
 
             # Save augmented images in the corresponding folder
             for i, augmented_image in enumerate(augmented_images):
