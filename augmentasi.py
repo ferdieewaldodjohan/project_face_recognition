@@ -3,6 +3,8 @@ import numpy as np
 import os
 import random
 
+
+
 def rotate_image(image, angle):
     (h, w) = image.shape[:2]
     center = (w // 2, h // 2)
