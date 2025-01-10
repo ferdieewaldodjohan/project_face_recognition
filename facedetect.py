@@ -19,7 +19,7 @@ known_names = []
 
 # Function to extract face encoding from an image and get the name from the filename
 def extract_face_encoding(image, filename, directory):
-    image = cv2.resize(image, (640, 640))
+    image = cv2.resize(image, (1280, 1280))
     faces = face_detector(image)
     if len(faces) == 0:
         return None, None

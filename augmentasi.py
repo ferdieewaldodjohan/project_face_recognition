@@ -79,11 +79,52 @@ def color_jitter(image, hue_delta=18, saturation_scale=1.5, brightness_scale=1.5
     jittered = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     return jittered
 
-def convert_to_grayscale(image):
-    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    return grayscale
+# def convert_to_grayscale(image):
+#     grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+#     return grayscale
+
+def perspective_rotate_y(image, angle):
+    """
+    Rotate the image around the Y-axis (perspective view).
+    """
+    h, w = image.shape[:2]
+    f = max(h, w)  # Approximate focal length
+    theta = np.radians(angle)
+    
+    # Rotation matrix for Y-axis
+    rotation_matrix_y = np.array([
+        [np.cos(theta), 0, np.sin(theta)],
+        [0, 1, 0],
+        [-np.sin(theta), 0, np.cos(theta)]
+    ])
+    
+    # Map the original 2D points to 3D
+    src_points = []
+    for y in range(h):
+        for x in range(w):
+            src_points.append([x - w // 2, y - h // 2, f])  # Assume z = focal length (f)
+    src_points = np.array(src_points)
+    
+    # Apply rotation
+    rotated_points = src_points @ rotation_matrix_y.T
+    
+    # Project back to 2D
+    projected_points = np.zeros((h * w, 2), dtype=np.float32)
+    transformed_image = np.zeros_like(image)
+    for i, point in enumerate(rotated_points):
+        if point[2] > 0:  # Avoid division by zero
+            x = int(point[0] / point[2] * f + w // 2)
+            y = int(point[1] / point[2] * f + h // 2)
+            if 0 <= x < w and 0 <= y < h:  # Clamp to image bounds
+                original_x, original_y = divmod(i, w)
+                if 0 <= original_x < w and 0 <= original_y < h:
+                    transformed_image[int(y), int(x)] = image[original_y, original_x]
+    
+    return transformed_image
+
 
 def augment_image(image):
+    balek_image = flip_image(image, 1)
     augmented_images = []
 
     # Original image
@@ -96,15 +137,23 @@ def augment_image(image):
     # Scale
     augmented_images.append(scale_image(image, 2))
     augmented_images.append(scale_image(image, 1))
+    augmented_images.append(scale_image(balek_image, 2))
+    augmented_images.append(scale_image(balek_image, 1))
+   
 
     # Translate
     augmented_images.append(translate_image(image, 20, 0))
     augmented_images.append(translate_image(image, -20, 0))
     augmented_images.append(translate_image(image, 0, 20))
     augmented_images.append(translate_image(image, 0, -20))
+    augmented_images.append(translate_image(balek_image, 20, 0))
+    augmented_images.append(translate_image(balek_image, -20, 0))
+    augmented_images.append(translate_image(balek_image, 0, 20))
+    augmented_images.append(translate_image(balek_image, 0, -20))
 
     # Flip
     augmented_images.append(flip_image(image, 1))  # Horizontal flip
+    augmented_images.append(flip_image(balek_image, 1))  # Horizontal flip
     # augmented_images.append(flip_image(image, 0))  # Vertical flip
 
     # Brightness and Contrast
@@ -112,13 +161,20 @@ def augment_image(image):
     augmented_images.append(adjust_brightness_contrast(image, 90, 90))
     augmented_images.append(adjust_brightness_contrast(image, -80, -80))
     augmented_images.append(adjust_brightness_contrast(image, -120, -120))
+    augmented_images.append(adjust_brightness_contrast(balek_image, 30, 30))
+    augmented_images.append(adjust_brightness_contrast(balek_image, 90, 90))
+    augmented_images.append(adjust_brightness_contrast(balek_image, -80, -80))
+    augmented_images.append(adjust_brightness_contrast(balek_image, -120, -120))
+
 
     # Gaussian Noise
     augmented_images.append(add_gaussian_noise(image, 0, 15))
+    augmented_images.append(add_gaussian_noise(balek_image, 0, 15))
 
     # Crop
     h, w = image.shape[:2]
     augmented_images.append(crop_image(image, 20, 20, w-40, h-40))
+    augmented_images.append(crop_image(balek_image, 20, 20, w-40, h-40))
 
     # Perspective Transform
     src_points = np.float32([[0, 0], [w-1, 0], [0, h-1], [w-1, h-1]])
@@ -126,12 +182,20 @@ def augment_image(image):
     dst_points[1] += (20, 0)
     dst_points[2] += (0, 20)
     augmented_images.append(perspective_transform(image, src_points, dst_points))
+    augmented_images.append(perspective_transform(balek_image, src_points, dst_points))
 
     # Color Jitter
     augmented_images.append(color_jitter(image))
+    augmented_images.append(color_jitter(balek_image))
 
-    # Black and White
-    augmented_images.append(convert_to_grayscale(image))
+    # # Black and White
+    # augmented_images.append(convert_to_grayscale(image))
+
+    # Perspective Rotate (Simulate Right/Left View)
+    augmented_images.append(perspective_rotate_y(image, 30))  # Rotate to the right
+    augmented_images.append(perspective_rotate_y(image, -30))  # Rotate to the left
+    augmented_images.append(perspective_rotate_y(balek_image, 30))  # Rotate flipped to the right
+    augmented_images.append(perspective_rotate_y(balek_image, -30))  # Rotate flipped to the left
 
     return augmented_images
 
